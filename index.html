@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disiplin Takibi v4 - Profil Destekli</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body { background-color: #050505; color: white; font-family: 'Inter', sans-serif; }
+        .glass { background: rgba(255, 255, 255, 0.02); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+        .photo-card:hover .delete-btn { opacity: 1; }
+        .profile-upload:hover .camera-overlay { opacity: 1; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const DuoTracker = () => {
+            const [data, setData] = useState(() => {
+                const saved = localStorage.getItem('v4_discipline_data');
+                const today = new Date().toLocaleDateString('tr-TR');
+                const defaultState = {
+                    lastUpdate: today,
+                    profiles: {
+                        userA: { name: 'Erdil Koçak', avatar: null, color: '#2563eb' },
+                        userB: { name: 'Berkin Konan', avatar: null, color: '#d97706' }
+                    },
+                    tasks: {
+                        userA: { workout: [], nutrition: [] },
+                        userB: { workout: [], nutrition: [] }
+                    }
+                };
+                if (!saved) return defaultState;
+                return JSON.parse(saved);
+            });
+
+            useEffect(() => {
+                localStorage.setItem('v4_discipline_data', JSON.stringify(data));
+                lucide.createIcons();
+            }, [data]);
+
+            // Profil Fotoğrafı Yükleme
+            const handleAvatarUpload = (userId, file) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    setData(prev => ({
+                        ...prev,
+                        profiles: {
+                            ...prev.profiles,
+                            [userId]: { ...prev.profiles[userId], avatar: e.target.result }
+                        }
+                    }));
+                };
+                reader.readAsDataURL(file);
+            };
+
+            // Görev Fotoğrafı Yükleme
+            const handleTaskUpload = (userId, type, file) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const now = new Date();
+                    const newPhoto = {
+                        id: Date.now(),
+                        url: e.target.result,
+                        time: now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+                        date: now.toLocaleDateString('tr-TR')
+                    };
+                    setData(prev => ({
+                        ...prev,
+                        tasks: {
+                            ...prev.tasks,
+                            [userId]: { ...prev.tasks[userId], [type]: [...prev.tasks[userId][type], newPhoto] }
+                        }
+                    }));
+                };
+                reader.readAsDataURL(file);
+            };
+
+            const deletePhoto = (userId, type, photoId) => {
+                setData(prev => ({
+                    ...prev,
+                    tasks: {
+                        ...prev.tasks,
+                        [userId]: { ...prev.tasks[userId], [type]: prev.tasks[userId][type].filter(p => p.id !== photoId) }
+                    }
+                }));
+            };
+
+            const renderCard = (uid) => {
+                const profile = data.profiles[uid];
+                const userTasks = data.tasks[uid];
+
+                return (
+                    <div className="glass p-6 rounded-[2.5rem] shadow-2xl relative border border-white/5">
+                        {/* Profil Başlık Alanı */}
+                        <div className="flex items-center gap-4 mb-10">
+                            <label className="relative w-16 h-16 rounded-full cursor-pointer group profile-upload overflow-hidden border-2 border-white/10 shrink-0">
+                                {profile.avatar ? (
+                                    <img src={profile.avatar} className="w-full h-full object-cover" />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center font-bold text-xl" style={{backgroundColor: profile.color}}>
+                                        {profile.name.charAt(0)}
+                                    </div>
+                                )}
+                                <div className="camera-overlay opacity-0 absolute inset-0 bg-black/60 flex items-center justify-center transition-opacity">
+                                    <i data-lucide="camera" className="w-5 h-5 text-white"></i>
+                                </div>
+                                <input type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files[0] && handleAvatarUpload(uid, e.target.files[0])} />
+                            </label>
+                            <div>
+                                <h2 className="text-xl font-black tracking-tight">{profile.name}</h2>
+                                <p className="text-gray-500 text-xs font-medium uppercase tracking-widest">kardeşcan</p>
+                            </div>
+                        </div>
+
+                        {/* Görevler */}
+                        <div className="space-y-8">
+                            {['workout', 'nutrition'].map(type => (
+                                <div key={type}>
+                                    <div className="flex justify-between items-center mb-4 px-2">
+                                        <h3 className="font-bold text-sm text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                                            {type === 'workout' ? <i data-lucide="dumbbell" className="w-4 h-4 text-blue-500"></i> : <i data-lucide="apple" className="w-4 h-4 text-green-500"></i>}
+                                            {type === 'workout' ? 'Antrenman' : 'Beslenme'}
+                                        </h3>
+                                        <label className="cursor-pointer bg-white/5 hover:bg-white/10 p-2 rounded-xl transition-all border border-white/10 active:scale-95">
+                                            <i data-lucide="plus" className="w-5 h-5 text-white"></i>
+                                            <input type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files[0] && handleTaskUpload(uid, type, e.target.files[0])} />
+                                        </label>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {userTasks[type].length === 0 ? (
+                                            <div className="col-span-2 py-10 border-2 border-dashed border-white/5 rounded-[2rem] text-center text-gray-600 text-xs italic">
+                                                Henüz bir kanıt yüklenmedi...
+                                            </div>
+                                        ) : (
+                                            userTasks[type].map((img) => (
+                                                <div key={img.id} className="photo-card group relative bg-white/5 p-2 rounded-[1.5rem] border border-white/10">
+                                                    <img src={img.url} className="w-full h-36 object-cover rounded-[1.2rem]" />
+                                                    <button 
+                                                        onClick={() => deletePhoto(uid, type, img.id)}
+                                                        className="delete-btn opacity-0 absolute top-4 right-4 bg-red-600/90 hover:bg-red-500 p-2 rounded-xl transition-all shadow-xl backdrop-blur-md"
+                                                    >
+                                                        <i data-lucide="trash-2" className="w-4 h-4"></i>
+                                                    </button>
+                                                    <div className="mt-3 px-1 flex justify-between items-center text-[10px] text-gray-500 font-bold uppercase">
+                                                        <span>{img.time}</span>
+                                                        <span className="bg-white/5 px-2 py-1 rounded-md">{img.date.split('.')[0] + '.' + img.date.split('.')[1]}</span>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="max-w-5xl mx-auto px-4 py-16">
+                    <header className="flex flex-col items-center mb-16 text-center">
+                        <div className="w-12 h-1 bg-blue-600 rounded-full mb-6"></div>
+                        <h1 className="text-5xl font-black tracking-tighter mb-2 italic">500 TL <span className="text-blue-600 underline">CEZA</span></h1>
+                        <p className="text-gray-500 font-mono text-xs uppercase tracking-[0.3em]">IYILIK IYIDIR</p>
+                    </header>
+                    
+                    <div className="grid md:grid-cols-2 gap-10">
+                        {renderCard('userA')}
+                        {renderCard('userB')}
+                    </div>
+
+                    <footer className="mt-24 text-center">
+                        <p className="text-[10px] text-gray-700 font-bold tracking-[0.5em] uppercase">Private Accountability System v4.0</p>
+                    </footer>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<DuoTracker />);
+    </script>
+</body>
+</html>
