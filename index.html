@@ -9,19 +9,14 @@
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <style>
-        body { background: #050505; color: white; font-family: sans-serif; }
-        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
-    </style>
 </head>
 <body>
     <div id="root"></div>
 
-    <script type="text/babel">
-        // Firebase kütüphanelerini direkt CDN üzerinden import ediyoruz
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, doc, onSnapshot, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
+    <script type="text/babel">
         const firebaseConfig = {
             apiKey: "AIzaSyBJLHrp81WM7Z2mMNfm9sGxu3HPC4paxEE",
             authDomain: "disiplintakibi.firebaseapp.com",
@@ -31,16 +26,17 @@
             appId: "1:888966592370:web:cb5fa1c4803861c14d0feb"
         };
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+        // Compat modu ile başlatıyoruz (Hata payı sıfır)
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
 
         const DuoTracker = () => {
             const [data, setData] = React.useState(null);
 
             React.useEffect(() => {
-                const unsub = onSnapshot(doc(db, "trackers", "main_sync"), (docSnap) => {
-                    if (docSnap.exists()) {
-                        setData(docSnap.data());
+                const unsub = db.collection("trackers").doc("main_sync").onSnapshot((doc) => {
+                    if (doc.exists) {
+                        setData(doc.data());
                     } else {
                         const initialState = {
                             profiles: {
@@ -52,14 +48,14 @@
                                 userB: { workout: [], nutrition: [], sigara: [] }
                             }
                         };
-                        setDoc(doc(db, "trackers", "main_sync"), initialState);
+                        db.collection("trackers").doc("main_sync").set(initialState);
                     }
                 });
                 return () => unsub();
             }, []);
 
             const handlePhotoLink = async (uid, type) => {
-                const url = prompt("Fotoğraf URL'sini buraya yapıştırın (Şimdilik Storage yerine link kullanıyoruz):");
+                const url = prompt("Fotoğraf Linki:");
                 if (!url) return;
 
                 const newData = { ...data };
@@ -69,39 +65,35 @@
                     time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
                     date: new Date().toLocaleDateString('tr-TR')
                 });
-                await updateDoc(doc(db, "trackers", "main_sync"), newData);
+                await db.collection("trackers").doc("main_sync").update(newData);
             };
 
-            if (!data) return <div className="h-screen flex items-center justify-center text-blue-500 font-bold tracking-widest animate-pulse uppercase">Sistem Yükleniyor...</div>;
+            if (!data) return <div className="min-h-screen bg-black flex items-center justify-center text-blue-500 font-bold uppercase tracking-tighter">Sistem Yükleniyor...</div>;
 
             const renderCard = (uid) => {
                 const isBerkin = uid === 'userB';
                 const categories = isBerkin ? ['workout', 'nutrition', 'sigara'] : ['workout', 'nutrition'];
 
                 return (
-                    <div className="glass p-6 rounded-[2rem] shadow-2xl mb-6">
-                        <div className="mb-6">
-                            <h2 className="text-2xl font-black">{data.profiles[uid].name}</h2>
-                            <div className="h-1 w-12 bg-blue-600 mt-1 rounded-full"></div>
-                        </div>
-
+                    <div className="bg-zinc-900/50 p-6 rounded-[2rem] border border-white/10 mb-6">
+                        <h2 className="text-2xl font-black mb-6 text-white uppercase italic">{data.profiles[uid].name}</h2>
                         {categories.map(cat => (
                             <div key={cat} className="mb-6">
                                 <div className="flex justify-between items-center mb-3">
-                                    <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                                    <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">
                                         {cat === 'workout' ? 'Antrenman' : cat === 'nutrition' ? 'Beslenme' : 'Sigara Takibi'}
                                     </h3>
-                                    <button onClick={() => handlePhotoLink(uid, cat)} className="bg-white/10 p-1.5 rounded-lg hover:bg-white/20 transition-all">
-                                        <i data-lucide="plus" className="w-4 h-4"></i>
+                                    <button onClick={() => handlePhotoLink(uid, cat)} className="bg-white/5 p-2 rounded-lg hover:bg-white/10">
+                                        <i data-lucide="plus" className="w-4 h-4 text-white"></i>
                                     </button>
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
                                     {data.tasks[uid][cat]?.map(item => (
                                         <div key={item.id} className="relative group">
-                                            <img src={item.url} className="w-full h-24 object-cover rounded-xl border border-white/5" />
-                                            <div className="flex justify-between text-[8px] mt-1 text-gray-500 font-bold">
+                                            <img src={item.url} className="w-full h-24 object-cover rounded-xl border border-white/5 shadow-lg" />
+                                            <div className="flex justify-between text-[8px] mt-1 text-zinc-600 font-bold">
                                                 <span>{item.date}</span>
-                                                <span>{item.time}</span>
+                                                <span className="bg-white/5 px-1 rounded">{item.time}</span>
                                             </div>
                                         </div>
                                     ))}
@@ -113,9 +105,12 @@
             };
 
             return (
-                <div className="max-w-4xl mx-auto px-4 py-12">
-                    <h1 className="text-4xl font-black text-center mb-12 italic uppercase tracking-tighter">Discipline <span className="text-blue-600">Sync</span></h1>
-                    <div className="grid md:grid-cols-2 gap-6">
+                <div className="min-h-screen bg-[#050505] text-white py-12 px-4">
+                    <header className="text-center mb-16">
+                        <h1 className="text-4xl font-black italic uppercase tracking-tighter">Discipline <span className="text-blue-600 underline">Sync</span></h1>
+                        <p className="text-[10px] text-zinc-500 mt-2 tracking-[0.5em] font-bold uppercase">Cloud Connection Stable</p>
+                    </header>
+                    <div className="max-w-4xl mx-auto grid md:grid-cols-2 gap-8">
                         {renderCard('userA')}
                         {renderCard('userB')}
                     </div>
