@@ -3,27 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Disiplin Lab - Sync Edition</title>
+    <title>Disiplin Lab - Sync</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-        body { background: #050505; color: white; font-family: 'Inter', sans-serif; overflow-x: hidden; }
-        .glass { background: rgba(255, 255, 255, 0.02); backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.08); }
-        .photo-card:hover .delete-btn { opacity: 1; }
+        body { background: #050505; color: white; font-family: sans-serif; }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
-    <script type="module" type="text/babel">
+    <script type="text/babel">
+        // Firebase kütüphanelerini direkt CDN üzerinden import ediyoruz
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, doc, onSnapshot, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-        import { getStorage, ref, uploadString, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
-
-        const { useState, useEffect } = React;
 
         const firebaseConfig = {
             apiKey: "AIzaSyBJLHrp81WM7Z2mMNfm9sGxu3HPC4paxEE",
@@ -36,23 +33,19 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        const storage = getStorage(app);
 
         const DuoTracker = () => {
-            const [data, setData] = useState(null);
+            const [data, setData] = React.useState(null);
 
-            useEffect(() => {
+            React.useEffect(() => {
                 const unsub = onSnapshot(doc(db, "trackers", "main_sync"), (docSnap) => {
                     if (docSnap.exists()) {
-                        const cloudData = docSnap.data();
-                        // Berkin (userB) için sigara alanı yoksa ekle
-                        if (!cloudData.tasks.userB.sigara) cloudData.tasks.userB.sigara = [];
-                        setData(cloudData);
+                        setData(docSnap.data());
                     } else {
                         const initialState = {
                             profiles: {
-                                userA: { name: 'Erdil Koçak', avatar: null, color: '#2563eb' },
-                                userB: { name: 'Berkin Konan', avatar: null, color: '#d97706' }
+                                userA: { name: 'Erdil Koçak' },
+                                userB: { name: 'Berkin Konan' }
                             },
                             tasks: {
                                 userA: { workout: [], nutrition: [] },
@@ -65,101 +58,64 @@
                 return () => unsub();
             }, []);
 
-            const uploadToCloud = async (path, base64) => {
-                const storageRef = ref(storage, path);
-                await uploadString(storageRef, base64, 'data_url');
-                return await getDownloadURL(storageRef);
-            };
+            const handlePhotoLink = async (uid, type) => {
+                const url = prompt("Fotoğraf URL'sini buraya yapıştırın (Şimdilik Storage yerine link kullanıyoruz):");
+                if (!url) return;
 
-            const handleUpload = (uid, type, file) => {
-                const reader = new FileReader();
-                reader.onload = async (e) => {
-                    const isAvatar = type === 'avatar';
-                    const path = isAvatar ? `avatars/${uid}` : `tasks/${uid}_${type}_${Date.now()}`;
-                    const url = await uploadToCloud(path, e.target.result);
-                    
-                    const newData = { ...data };
-                    if (isAvatar) {
-                        newData.profiles[uid].avatar = url;
-                    } else {
-                        newData.tasks[uid][type].push({
-                            id: Date.now(),
-                            url: url,
-                            time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
-                            date: new Date().toLocaleDateString('tr-TR')
-                        });
-                    }
-                    await updateDoc(doc(db, "trackers", "main_sync"), newData);
-                };
-                reader.readAsDataURL(file);
-            };
-
-            const deleteItem = async (uid, type, id) => {
                 const newData = { ...data };
-                newData.tasks[uid][type] = newData.tasks[uid][type].filter(item => item.id !== id);
+                newData.tasks[uid][type].push({
+                    id: Date.now(),
+                    url: url,
+                    time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+                    date: new Date().toLocaleDateString('tr-TR')
+                });
                 await updateDoc(doc(db, "trackers", "main_sync"), newData);
             };
 
-            if (!data) return <div className="h-screen flex items-center justify-center text-blue-500 font-bold animate-pulse">BULUT BAĞLANTISI KURULUYOR...</div>;
+            if (!data) return <div className="h-screen flex items-center justify-center text-blue-500 font-bold tracking-widest animate-pulse uppercase">Sistem Yükleniyor...</div>;
 
             const renderCard = (uid) => {
-                const profile = data.profiles[uid];
-                const tasks = data.tasks[uid];
                 const isBerkin = uid === 'userB';
                 const categories = isBerkin ? ['workout', 'nutrition', 'sigara'] : ['workout', 'nutrition'];
 
                 return (
-                    <div className="glass p-6 rounded-[2.5rem] shadow-2xl border border-white/5">
-                        <div className="flex items-center gap-4 mb-8">
-                            <label className="relative w-16 h-16 rounded-full overflow-hidden border-2 border-white/10 cursor-pointer">
-                                {profile.avatar ? <img src={profile.avatar} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center font-bold bg-gray-800 text-xl">{profile.name[0]}</div>}
-                                <input type="file" className="hidden" accept="image/*" onChange={e => e.target.files[0] && handleUpload(uid, 'avatar', e.target.files[0])} />
-                            </label>
-                            <div>
-                                <h2 className="text-xl font-black">{profile.name}</h2>
-                                <p className="text-[10px] text-gray-500 tracking-[0.2em] uppercase font-bold text-blue-500">Kayıtlı Partner</p>
-                            </div>
+                    <div className="glass p-6 rounded-[2rem] shadow-2xl mb-6">
+                        <div className="mb-6">
+                            <h2 className="text-2xl font-black">{data.profiles[uid].name}</h2>
+                            <div className="h-1 w-12 bg-blue-600 mt-1 rounded-full"></div>
                         </div>
 
-                        <div className="space-y-8">
-                            {categories.map(cat => (
-                                <div key={cat}>
-                                    <div className="flex justify-between items-center mb-3 px-2">
-                                        <h3 className="text-xs font-black text-gray-400 uppercase tracking-tighter flex items-center gap-2">
-                                            {cat === 'sigara' ? <i data-lucide="ban" className="w-4 h-4 text-red-500"></i> : <i data-lucide="check-circle" className="w-4 h-4 text-blue-500"></i>}
-                                            {cat === 'workout' ? 'Antrenman' : cat === 'nutrition' ? 'Beslenme' : 'Sigara Takibi'}
-                                        </h3>
-                                        <label className="cursor-pointer bg-white/5 hover:bg-white/10 p-2 rounded-xl transition-all border border-white/10">
-                                            <i data-lucide="plus" className="w-5 h-5 text-white"></i>
-                                            <input type="file" className="hidden" accept="image/*" onChange={e => e.target.files[0] && handleUpload(uid, cat, e.target.files[0])} />
-                                        </label>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        {tasks[cat]?.map(item => (
-                                            <div key={item.id} className="photo-card relative bg-white/5 p-1.5 rounded-[1.2rem] border border-white/5 group">
-                                                <img src={item.url} className="w-full h-28 object-cover rounded-xl" />
-                                                <button onClick={() => deleteItem(uid, cat, item.id)} className="delete-btn opacity-0 absolute top-2 right-2 bg-red-600 p-1.5 rounded-lg transition-all"><i data-lucide="trash-2" className="w-3 h-3 text-white"></i></button>
-                                                <div className="mt-2 flex justify-between text-[9px] font-bold text-gray-500 px-1 uppercase">
-                                                    <span>{item.date}</span>
-                                                    <span className="text-gray-300 bg-white/5 px-1 rounded">{item.time}</span>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
+                        {categories.map(cat => (
+                            <div key={cat} className="mb-6">
+                                <div className="flex justify-between items-center mb-3">
+                                    <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                                        {cat === 'workout' ? 'Antrenman' : cat === 'nutrition' ? 'Beslenme' : 'Sigara Takibi'}
+                                    </h3>
+                                    <button onClick={() => handlePhotoLink(uid, cat)} className="bg-white/10 p-1.5 rounded-lg hover:bg-white/20 transition-all">
+                                        <i data-lucide="plus" className="w-4 h-4"></i>
+                                    </button>
                                 </div>
-                            ))}
-                        </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    {data.tasks[uid][cat]?.map(item => (
+                                        <div key={item.id} className="relative group">
+                                            <img src={item.url} className="w-full h-24 object-cover rounded-xl border border-white/5" />
+                                            <div className="flex justify-between text-[8px] mt-1 text-gray-500 font-bold">
+                                                <span>{item.date}</span>
+                                                <span>{item.time}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 );
             };
 
             return (
-                <div className="max-w-4xl mx-auto px-4 py-16">
-                    <header className="text-center mb-16">
-                        <h1 className="text-5xl font-black tracking-tighter italic mb-2 uppercase">Discipline <span className="text-blue-600 underline">Sync</span></h1>
-                        <p className="text-gray-600 text-[10px] font-bold tracking-[0.4em] uppercase">Cloud Integrated System v5.0</p>
-                    </header>
-                    <div className="grid md:grid-cols-2 gap-8">
+                <div className="max-w-4xl mx-auto px-4 py-12">
+                    <h1 className="text-4xl font-black text-center mb-12 italic uppercase tracking-tighter">Discipline <span className="text-blue-600">Sync</span></h1>
+                    <div className="grid md:grid-cols-2 gap-6">
                         {renderCard('userA')}
                         {renderCard('userB')}
                     </div>
